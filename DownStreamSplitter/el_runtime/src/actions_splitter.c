@@ -1,9 +1,9 @@
 /************************** File Information ************************************
- * File Name                     :  RTD_ACTION_SPLITTER.c                      		*
- * Client                        :  			                          *
- * Application                   :                              		*
+ * File Name                     :  RTD_ACTION_SPLITTER.c                      	*
+ * Client                        :  			                          		*
+ * Application                   :                              				*
  * Functionality/Description     :  Performs conversion and validation          *
- * Last modified/Latest version  :                                  *
+ * Last modified/Latest version  :                                  			*
  * Last modified/Latest version  :  1.0.0                                       *
  *******************************************************************************/
 
@@ -28,12 +28,17 @@ char add[100];
 char oadd[100];
 char tmp[10];
 char msisdn[20];
+char logicId[20];
+char actionName[50];
 char cid[50];
-char* aid = NULL;
 char action_add[100];
+char actionAbsolutePath[200];
+char downstreamAbsPath[200];
+char actionBlockAbsolutePath[200];
+char contentAbsPath[200];
 char fhandle[50];
 
-char*  get_block_name(const char* absolute_path);
+
 /***********************************************************************
  *
  * Reserved functions
@@ -71,40 +76,44 @@ node_process (void)
 	memset(oadd,'\0',sizeof(oadd));
 	memset(tmp,'\0',sizeof(tmp));
 	memset(msisdn,'\0',sizeof(msisdn));
+	memset(logicId,'\0',sizeof(logicId));
+	memset(actionName,'\0',sizeof(actionName));
+	memset(actionAbsolutePath, '\0',sizeof(actionAbsolutePath));
+	memset(downstreamAbsPath,'\0',sizeof(downstreamAbsPath));
+	memset(contentAbsPath,'\0',sizeof(contentAbsPath));
+	memset(actionBlockAbsolutePath,'\0',sizeof(actionBlockAbsolutePath));
 	memset(cid,'\0',sizeof(cid));
-	aid = (char*)malloc(100 * sizeof(char));
-	if (aid == NULL) {
-    return ;
-	}
 	memset(fhandle,'\0',sizeof(fhandle));
-	strcpy(msisdn,i_get(".profiles.subscriber.id"));
-	
+	strcpy(msisdn,i_get("callingNumber"));
+
+	// ---------------            PARDIS out Preparing           ---------------------
 	i_next("__RULE_ENGINE__");
 	i_enter();
 	if(i_field_exists("ACTIONS")){
 		
-		i_next("ACTIONS");
+		i_next("TRIGGERED_ACTIONS");
 		i_enter();
-		while(i_next(""))
-		{
-			i_enter();
-			if(strcmp(i_get("DOWNSTREAM"),"PARDIS") == 0 || strcmp(i_get("DOWNSTREAM"),"pardis") == 0){
-				nb_new_record();
-				
-				// cc getting action_id from Blocks name using absolute address:
-				strcpy(action_add,i_get_address());
-				aid = get_block_name(action_add);
-				strcpy(cid,i_get("CONTENT_ID"));
-				
-				o_add_field("msisdn",msisdn);
-				o_add_field("action_id",aid);
-				o_add_field("content_id",cid);
-				o_add_field("retry_count","0");
-				nb_write_record("OUT_PARDIS");
-				//		i_exit();
-			}
-			i_exit();
-			//	nb_write_record("OUT_PARADIS");
+	
+		while (i_next("")) {
+			strcpy(actionAbsolutePath, ".__RULE_ENGINE__.ACTIONS.");
+			strcpy(logicId,i_get_field_name());
+			strcpy(actionName, i_get(logicId));
+			strcat(actionAbsolutePath,actionName);
+			strcat(actionAbsolutePath,".");
+			strcpy(downstreamAbsPath,actionAbsolutePath);
+			strcpy(contentAbsPath,actionAbsolutePath);
+			strcat(downstreamAbsPath,"DOWNSTREAM");
+			strcat(contentAbsPath,"CONTENT_ID");
+			if(strcmp(i_get(downstreamAbsPath),"PARDIS") == 0 || strcmp(i_get(downstreamAbsPath),"pardis") == 0){
+					nb_new_record();
+					strcpy(cid,i_get(contentAbsPath));
+					o_add_field("msisdn",msisdn);
+					o_add_field("logic_id",logicId);
+					o_add_field("action_id",actionName);
+					o_add_field("content_id",cid);
+					o_add_field("retry_count","0");
+					nb_write_record("OUT_PARDIS");
+				}
 		}
 		i_exit();
 
@@ -114,24 +123,29 @@ node_process (void)
 		o_copy_input();
 		o_next("__RULE_ENGINE__");
 		o_enter();
-		o_next("ACTIONS");
+		o_next("TRIGGERED_ACTIONS");
 		o_enter();
 		while(o_next(""))
 		{
-			o_enter();
-			if(strcmp(i_get("DOWNSTREAM"),"PARDIS") == 0 || strcmp(i_get("DOWNSTREAM"),"pardis") == 0){
-				strcpy(action_add,i_get_address());
-				aid = get_block_name(action_add);
+			strcpy(actionAbsolutePath, ".__RULE_ENGINE__.ACTIONS.");
+			strcpy(logicId,o_get_field_name());
+			strcpy(actionName, o_get(logicId));
+			strcat(actionAbsolutePath,actionName);
+			strcpy(actionBlockAbsolutePath,actionAbsolutePath);
+			strcat(actionAbsolutePath,".");
+			strcpy(downstreamAbsPath,actionAbsolutePath);
+			strcat(downstreamAbsPath,"DOWNSTREAM");
+			if(strcmp(o_get(downstreamAbsPath),"PARDIS") == 0 || strcmp(o_get(downstreamAbsPath),"pardis") == 0){
+				
+				o_delete(logicId);
+				o_delete(actionBlockAbsolutePath);
 			}
-			o_exit();
-			o_delete(aid);
+			
 		}
 		o_exit();
 		nb_write_record("OUT_CMS");
 
-		//nb_write_record("OUT_PARADIS");
 		memset(oadd, '\0', sizeof(oadd));
-		//	}
 		i_exit();
 	}
 	DIAG (DIAG_HIGH, "node_process(): returning...");
@@ -295,13 +309,13 @@ void remove_period(char *str){
 	}
 }
 
-
-// --------------        cc Function - Get Block Name      ------------
+//------------------------------------------------------------------------------
+// --------------        cc Function - Get Block Name      ---------------------
 /*
 This funciton is to get the action block name in the ACTIONS block based on the
 absolute path of the block.
 */
-
+//------------------------------------------------------------------------------
 char*  get_block_name(const char* absolute_path) {
 	char* path = malloc(strlen(absolute_path) + 1 );
 	if (path == NULL) {
@@ -316,6 +330,8 @@ char*  get_block_name(const char* absolute_path) {
 	free (path);
 	return result;
 }
+
+
 
 
 /* FUNCTION:  lowercase - Function to convert a string to lowercase string
@@ -341,5 +357,4 @@ void uppercase(const char *input,char *output)
 	}
 	output[i] = '\0';
 }
-
 

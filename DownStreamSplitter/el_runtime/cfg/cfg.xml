@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <configuration elversion="6.1">
     <name>RTD_ACTION_SPLITTER_NODE</name>
-    <version major="1" minor="0" defect="1" patch=""/>
-    <description>Initial version.</description>
+    <version major="2" minor="0" defect="0" patch=""/>
+    <description>cc LogicID Extract and Add. The Triggered action extraction logic changed</description>
     <type>
         <collector>false</collector>
         <intermediate>false</intermediate>
